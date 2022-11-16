@@ -25,7 +25,7 @@ class PostsViewsTests(TestCase):
         )
         cls.templates_pages_names = {
             'posts/index.html': reverse('posts:index'),
-            'posts/create_post.html': reverse('posts:create'),
+            'posts/create_post.html': reverse('posts:create_post'),
             'posts/group_list.html': reverse(
                 'posts:group_list',
                 kwargs={'slug': 'test-slug'},
@@ -126,7 +126,7 @@ class PostsViewsTests(TestCase):
                 kwargs={'username': self.user.username},
             )
         )
-        profile = {'user_obj': self.post.author}
+        profile = {'author': self.post.author}
 
         for value, expected in profile.items():
             with self.subTest(value=value):
