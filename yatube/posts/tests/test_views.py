@@ -2,9 +2,14 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.urls import reverse
+
 from posts.models import Group, Post
 
 User = get_user_model()
+
+POST_PER_PAGE = 10
+
+COUNT_RANGE = 13
 
 
 class PostsViewsTests(TestCase):
@@ -23,14 +28,13 @@ class PostsViewsTests(TestCase):
             author=cls.user,
             group=cls.group,
         )
-        cls.templates_pages_names = {
-            'posts/index.html': reverse('posts:index'),
-            'posts/create_post.html': reverse('posts:create_post'),
-            'posts/group_list.html': reverse(
-                'posts:group_list',
-                kwargs={'slug': 'test-slug'},
-            )
-        }
+        cls.index = ('posts:index', None)
+        cls.group_page = ('posts:group_list', ['test-slug'])
+        cls.profile = ('posts: profile', [cls.user])
+        cls.detail = ('posts:post_detail', [cls.post.id])
+        cls.create = ('posts: post_create', None)
+        cls.edit = ('posts:post_edit', [cls.post.id])
+
 
     def setUp(self):
         self.authorized_client = Client()
@@ -50,16 +54,29 @@ class PostsViewsTests(TestCase):
                 response = self.authorized_client.get(reverse_name)
                 self.assertTemplateUsed(response, template)
 
-    def test_posts_context_index_template(self):
-        """
-        Проверка, сформирован ли шаблон group_list с
-        правильным контекстом.
-        Появляется ли пост, при создании на главной странице.
-        """
-        response = self.authorized_client.get(reverse('posts:index'))
-        self.posts_check_all_fields(response.context['page_obj'][0])
-        last_post = response.context['page_obj'][0]
-        self.assertEqual(last_post, self.post)
+    def test_index_group_profile_show_correct_context_posts(self):
+        """Шаблоны index, group_list, profile сформированы
+        с правильным контекстом."""
+        responses = (
+        self.index,
+        self.group_page,
+        self. profile,
+        )
+        for response in responses:
+            with self.subTest(response=response):
+                template_address, argument = response
+                first_object = self.guest_client.get(reverse(
+                    template_address,args=argument
+                    )
+                ).context['page_obj'][0]
+                context = (
+                    (first_object.author, self.user),
+                    (first_object.text, self.post.text),
+                    (first_object.group, self.group),
+                )
+                for context, reverse_context in context:
+                    with self.subTest(context=context):
+                        self.assertEqual(context, reverse_context)
 
     def test_posts_context_group_list_template(self):
         """
@@ -68,23 +85,19 @@ class PostsViewsTests(TestCase):
         Появляется ли пост, при создании на странице его группы.
         """
         response = self.authorized_client.get(
-            reverse(
-                'posts:group_list',
-                kwargs={'slug': self.group.slug},
-            )
+            self.group_page
         )
         test_group = response.context['group']
         self.posts_check_all_fields(response.context['page_obj'][0])
         test_post = str(response.context['page_obj'][0])
         self.assertEqual(test_group, self.group)
-        self.assertEqual(test_post, str(self.post))
 
     def test_posts_context_post_create_template(self):
         """
         Проверка, сформирован ли шаблон post_create с
         правильным контекстом.
         """
-        response = self.authorized_client.get(reverse('posts:create_post'))
+        response = self.authorized_client.get(self.create_post)
 
         form_fields = {
             'group': forms.fields.ChoiceField,
@@ -102,10 +115,7 @@ class PostsViewsTests(TestCase):
         правильным контекстом.
         """
         response = self.authorized_client.get(
-            reverse(
-                'posts:post_edit',
-                kwargs={'post_id': self.post.id},
-            )
+            self.post_edit
         )
 
         form_fields = {'text': forms.fields.CharField}
@@ -121,16 +131,13 @@ class PostsViewsTests(TestCase):
         правильным контекстом.
         """
         response = self.authorized_client.get(
-            reverse(
-                'posts:profile',
-                kwargs={'username': self.user.username},
-            )
+            self.profile
         )
         profile = {'author': self.post.author}
 
         for value, expected in profile.items():
             with self.subTest(value=value):
-                context = (response.context[value])
+                context = response.context[value]
                 self.assertEqual(context, expected)
 
         self.posts_check_all_fields(response.context['page_obj'][0])
@@ -143,10 +150,7 @@ class PostsViewsTests(TestCase):
         правильным контекстом.
         """
         response = self.authorized_client.get(
-            reverse(
-                'posts:post_detail',
-                kwargs={'post_id': self.post.id},
-            )
+            self.post_detail
         )
 
         profile = {'post': self.post}
@@ -161,7 +165,7 @@ class PostsViewsTests(TestCase):
         Проверка, при указании группы поста, попадает
         ли он в другую группу.
         """
-        response = self.authorized_client.get(reverse('posts:index'))
+        response = self.authorized_client.get(self.index)
         self.posts_check_all_fields(response.context['page_obj'][0])
         post = response.context['page_obj'][0]
         group = post.group
@@ -175,20 +179,23 @@ class PostsPaginatorViewsTests(TestCase):
         cls.user = User.objects.create_user(username='Тестовый пользователь')
         cls.authorized_client = Client()
         cls.authorized_client.force_login(cls.user)
-        for count in range(13):
+        for count in range(COUNT_RANGE):
             cls.post = Post.objects.create(
                 text=f'Тестовый текст поста номер {count}',
                 author=cls.user,
             )
+        cls.index = ('posts:index', None)
+        cls.group_page = ('posts:group_list', ['test-slug'])
+        cls.profile = ('posts: profile', [cls.user])
 
     def test_posts_if_first_page_has_ten_records(self):
         """Проверка, содержит ли первая страница 10 записей."""
-        response = self.authorized_client.get(reverse('posts:index'))
-        self.assertEqual(len(response.context.get('page_obj').object_list), 10)
+        response = self.authorized_client.get(self.index)
+        self.assertEqual(len(response.context.get('page_obj').object_list), POST_PER_PAGE)
 
     def test_posts_if_second_page_has_three_records(self):
         """Проверка, содержит ли вторая страница 3 записи."""
         response = self.authorized_client.get(
-            reverse('posts:index') + '?page=2'
+            self.index + '?page=2'
         )
         self.assertEqual(len(response.context.get('page_obj').object_list), 3)
