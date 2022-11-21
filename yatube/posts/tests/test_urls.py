@@ -36,11 +36,9 @@ class PostsUrlsTests(TestCase):
         cls.detail = ('posts:post_detail', [cls.post.id])
         cls.create = ('posts:create_post', None)
         cls.edit = ('posts:post_edit', [cls.post.id])
-        
 
     def setUp(self):
         self.guest_client = Client()
-
         self.authorized_client = Client()
         self.authorized_client.force_login(self.author)
 
@@ -105,7 +103,7 @@ class PostsUrlsTests(TestCase):
                 template_address, argument = url
                 response = self.guest_client.get(reverse(
                     template_address, args=argument
-                    ))
+                ))
                 self.assertRedirects(response, reverse(
                     'users:login')
                     + "?next=" + reverse(
@@ -132,16 +130,16 @@ class PostsUrlsTests(TestCase):
         )))
 
     def test_post_edit_redirect_login(self):
-            template_address, argument = self.edit
-            response = self.guest_client.get(reverse(
+        template_address, argument = self.edit
+        response = self.guest_client.get(reverse(
             template_address, args=argument
-            ))
-            self.assertRedirects(
-                response, reverse(
-                    'users:login'
-                ) + "?next=" + reverse(
-                    template_address, args=argument)
-            )
+        ))
+        self.assertRedirects(
+            response, reverse(
+                'users:login'
+            ) + "?next=" + reverse(
+                template_address, args=argument)
+        )
 
     def test_urls_use_correct_template(self):
         templates_url_names_public = [
@@ -152,7 +150,6 @@ class PostsUrlsTests(TestCase):
             (
                 'posts/group_list.html',
                 self.group_page
-                
             ),
             (
                 'posts/profile.html',
@@ -161,7 +158,6 @@ class PostsUrlsTests(TestCase):
             (
                 'posts/post_detail.html',
                 self.detail
-                
             ),
             (
                 'posts/create_post.html',

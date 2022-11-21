@@ -7,6 +7,7 @@ from django.urls import reverse
 
 from posts.models import Group, Post
 from posts.utils import POST_PER_PAGE
+
 User = get_user_model()
 
 
@@ -111,7 +112,6 @@ class PostsViewsTests(TestCase):
                 self.assertEqual(first_object.text, self.post.text)
                 self.assertEqual(first_object.group, self.group)
 
-
     def test_posts_context_group_list_template(self):
         """
         Проверка, сформирован ли шаблон group_list с
@@ -160,7 +160,6 @@ class PostsViewsTests(TestCase):
             'text': forms.fields.CharField,
             'group': forms.fields.ChoiceField,
         }
-        
 
         for value, expected in form_fields.items():
             with self.subTest(value=value):
@@ -235,8 +234,10 @@ class PostsViewsTests(TestCase):
         )
         self.assertEqual(len(response.context['page_obj']), 0)
 
+
 class PostsPaginatorViewsTests(TestCase):
     count_range = 13
+
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
