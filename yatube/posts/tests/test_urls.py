@@ -29,23 +29,14 @@ class PostsUrlsTests(TestCase):
             text='Пост для теста',
             group=cls.group,
         )
-        cls.templates_url_names_public = {
-            'posts/index.html': reverse('posts:index'),
-            'posts/group_list.html': reverse(
-                'posts:group_list',
-                kwargs={'slug': cls.group.slug},
-            ),
-            'posts/profile.html': reverse(
-                'posts:profile',
-                kwargs={'username': cls.author.username},
-            ),
-        }
 
-        cls.templates_url_names_private = {
-            'posts/create_post.html': reverse('posts:create_post'),
-            'posts/edit_post.html': reverse('posts:create_post',args=[self.post.pk])
-        }
-
+        cls.index = ('posts:index', None)
+        cls.group_page = ('posts:group_list', [cls.post.group.slug])
+        cls.profile = ('posts:profile', [cls.author])
+        cls.detail = ('posts:post_detail', [cls.post.id])
+        cls.create = ('posts:create_post', None)
+        cls.edit = ('posts:post_edit', [cls.post.id])
+        
 
     def setUp(self):
         self.guest_client = Client()
@@ -62,15 +53,18 @@ class PostsUrlsTests(TestCase):
         недоступных страниц.
         """
         url_names = [
-            reverse('posts:index'),
-            reverse('posts:group_list', args=[self.post.group.slug]),
-            reverse('posts:profile', args=[self.author]),
-            reverse('posts:post_detail', args=[self.post.pk]),
+            self.index,
+            self.group_page,
+            self.profile,
+            self.detail,
         ]
 
         for url in url_names:
             with self.subTest(url=url):
-                response = self.guest_client.get(url)
+                template_address, argument = url
+                response = self.guest_client.get(reverse(
+                    template_address, args=argument
+                ))
                 self.assertEqual(response.status_code, HTTPStatus.OK)
         response = self.guest_client.get('/unexisting_page/')
         self.assertEqual(response.status_code, HTTPStatus.NOT_FOUND)
@@ -81,16 +75,19 @@ class PostsUrlsTests(TestCase):
         недоступных страниц.
         """
         url_names = [
-            reverse('posts:index'),
-            reverse('posts:group_list', args=[self.post.group.slug]),
-            reverse('posts:profile', args=[self.author]),
-            reverse('posts:post_detail', args=[self.post.pk]),
-            reverse('posts:create_post'),
+            self.index,
+            self.group_page,
+            self.profile,
+            self.detail,
+            self.create,
         ]
 
         for url in url_names:
             with self.subTest(url=url):
-                response = self.authorized_client.get(url)
+                template_address, argument = url
+                response = self.no_author_client.get(reverse(
+                    template_address, args=argument
+                ))
                 self.assertEqual(response.status_code, HTTPStatus.OK)
 
     def test_urls_auth_user_private(self):
@@ -99,27 +96,34 @@ class PostsUrlsTests(TestCase):
         недоступных страниц.
         """
         url_names = [
-            reverse('posts:create_post'),
-            reverse('posts:post_edit', args=[self.post.pk]),
+            self.create,
+            self.edit,
         ]
 
         for url in url_names:
             with self.subTest(url=url):
-                response = self.guest_client.get(url)
+                template_address, argument = url
+                response = self.guest_client.get(reverse(
+                    template_address, args=argument
+                    ))
                 self.assertRedirects(response, reverse(
                     'users:login')
-                    + "?next=" + url
+                    + "?next=" + reverse(
+                        template_address, args=argument)
                 )
 
     def test_home_url_exists_for_author(self):
         """проверка доступности страниц только автору."""
         url_names = [
-            reverse('posts:post_edit', args=[self.post.pk]),
+            self.edit,
         ]
 
         for url in url_names:
             with self.subTest(url=url):
-                response = self.authorized_client.get(url)
+                template_address, argument = url
+                response = self.authorized_client.get(reverse(
+                    template_address, args=argument
+                ))
 
                 if self.post.author == self.authorized_client:
                     self.assertEqual(response.status_code, HTTPStatus.OK)
@@ -128,35 +132,50 @@ class PostsUrlsTests(TestCase):
                     self.assertRedirects(response, url)
 
                 else:
-                    response = self.guest_client.get(url)
+                    response = self.guest_client.get(reverse(
+                    template_address, args=argument
+                    ))
                     self.assertRedirects(
                         response, reverse(
                             'users:login'
                         ) + "?next=" + reverse(
-                            'posts:post_edit', args=[self.post.pk])
+                            template_address, args=argument)
                     )
 
-    def test_urls_guest_user_public(self):
-        """
-        Проверка на доступность ссылок гостевому пользователю и редирект
-        доступных страниц.
-        """
-        for template, reverse_name in self.templates_url_names_public.items():
-            with self.subTest():
-                response = self.guest_client.get(reverse_name)
-                self.assertEqual(response.status_code, HTTPStatus.OK)
-                self.assertTemplateUsed(response, template)
-
-    def test_urls_authorized_user(self):
-        """Проверка ссылок авторизованному пользователю - автору поста."""
-        for template, reverse_name in self.templates_url_names.items():
-            with self.subTest():
-                response = self.authorized_client.get(reverse_name)
-                self.assertEqual(response.status_code, HTTPStatus.OK)
-
     def test_urls_use_correct_template(self):
+        templates_url_names_public = [
+            (
+                'posts/index.html',
+                self.index
+            ),
+            (
+                'posts/group_list.html',
+                self.group_page
+                
+            ),
+            (
+                'posts/profile.html',
+                self.profile
+            ),
+            (
+                'posts/post_detail.html',
+                self.detail
+                
+            ),
+            (
+                'posts/create_post.html',
+                self.create
+            ),
+            (
+                'posts/create_post.html',
+                self.edit
+            )
+        ]
         """Проверка на то что URL-адрес использует подходящий шаблон."""
-        for template, reverse_name in self.templates_url_names.items():
+        for template, reverse_name in templates_url_names_public:
             with self.subTest():
-                response = self.authorized_client.get(reverse_name)
+                template_address, argument = reverse_name
+                response = self.authorized_client.get(reverse(
+                    template_address, args=argument
+                ))
                 self.assertTemplateUsed(response, template)
