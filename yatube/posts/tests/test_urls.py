@@ -8,6 +8,7 @@ from posts.models import Group, Post
 
 User = get_user_model()
 
+
 class PostsUrlsTests(TestCase):
     @classmethod
     def setUpClass(cls):
@@ -41,20 +42,10 @@ class PostsUrlsTests(TestCase):
         }
 
         cls.templates_url_names_private = {
-            'posts/create_post.html': reverse('posts:create_post')
+            'posts/create_post.html': reverse('posts:create_post'),
+            'posts/edit_post.html': reverse('posts:create_post',args=[self.post.pk])
         }
 
-        cls.templates_url_names = {
-            'posts/index.html': reverse('posts:index'),
-            'posts/group_list.html': reverse(
-                'posts:group_list',
-                kwargs={'slug': cls.group.slug},
-            ),
-            'posts/profile.html': reverse(
-                'posts:profile',
-                kwargs={'username': cls.author.username},
-            ),
-        }
 
     def setUp(self):
         self.guest_client = Client()
@@ -83,7 +74,6 @@ class PostsUrlsTests(TestCase):
                 self.assertEqual(response.status_code, HTTPStatus.OK)
         response = self.guest_client.get('/unexisting_page/')
         self.assertEqual(response.status_code, HTTPStatus.NOT_FOUND)
-        
 
     def test_urls_auth_user_private(self):
         """

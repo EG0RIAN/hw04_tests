@@ -4,10 +4,8 @@ from django.test import Client, TestCase
 from django.urls import reverse
 
 from posts.models import Group, Post
-
+from utils import POST_PER_PAGE
 User = get_user_model()
-
-POST_PER_PAGE = 10
 
 COUNT_RANGE = 13
 
@@ -34,7 +32,6 @@ class PostsViewsTests(TestCase):
         cls.detail = ('posts:post_detail', [cls.post.id])
         cls.create = ('posts:create_post', None)
         cls.edit = ('posts:post_edit', [cls.post.id])
-
 
     def setUp(self):
         self.guest_client = Client()
@@ -94,16 +91,16 @@ class PostsViewsTests(TestCase):
         """Шаблоны index, group_list, profile сформированы
         с правильным контекстом."""
         responses = (
-        self.index,
-        self.group_page,
-        self. profile,
+            self.index,
+            self.group_page,
+            self. profile,
         )
         for response in responses:
             with self.subTest(response=response):
                 template_address, argument = response
                 first_object = self.guest_client.get(reverse(
-                    template_address,args=argument
-                    )
+                    template_address, args=argument
+                )
                 ).context['page_obj'][0]
                 context = (
                     (first_object.author, self.user),
@@ -126,7 +123,6 @@ class PostsViewsTests(TestCase):
         )
         test_group = response.context['group']
         self.posts_check_all_fields(response.context['page_obj'][0])
-        test_post = str(response.context['page_obj'][0])
         self.assertEqual(test_group, self.group)
 
     def test_posts_context_post_create_template(self):
@@ -173,7 +169,7 @@ class PostsViewsTests(TestCase):
         """
         template_address, argument = self.profile
         response = self.authorized_client.get(
-           reverse(template_address, args=argument)
+            reverse(template_address, args=argument)
         )
         context = response.context['author']
         self.assertEqual(context, self.post.author)
@@ -230,7 +226,9 @@ class PostsPaginatorViewsTests(TestCase):
     def test_posts_if_first_page_has_ten_records(self):
         """Проверка, содержит ли первая страница 10 записей."""
         response = self.authorized_client.get(reverse(*self.index))
-        self.assertEqual(len(response.context.get('page_obj').object_list), POST_PER_PAGE)
+        self.assertEqual(len(
+            response.context.get('page_obj').object_list
+        ), POST_PER_PAGE)
 
     def test_posts_if_second_page_has_three_records(self):
         """Проверка, содержит ли вторая страница 3 записи."""
