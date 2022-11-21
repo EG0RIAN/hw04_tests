@@ -1,20 +1,21 @@
+from http import HTTPStatus
+
 from django import forms
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.urls import reverse
 
 from posts.models import Group, Post
-from utils import POST_PER_PAGE
+from posts.utils import POST_PER_PAGE
 User = get_user_model()
-
-COUNT_RANGE = 13
 
 
 class PostsViewsTests(TestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.user = User.objects.create_user(username='Тестовый пользователь')
+        cls.user = User.objects.create_user(username='Тестовый пользователь1')
+        cls.user2 = User.objects.create_user(username='Тестовый пользователь2')
         cls.group = Group.objects.create(
             title='Тестовое название',
             slug='test-slug',
@@ -29,6 +30,7 @@ class PostsViewsTests(TestCase):
         cls.index = ('posts:index', None)
         cls.group_page = ('posts:group_list', ['test-slug'])
         cls.profile = ('posts:profile', [cls.user])
+        cls.profile2 = ('posts:profile', [cls.user2])
         cls.detail = ('posts:post_detail', [cls.post.id])
         cls.create = ('posts:create_post', None)
         cls.edit = ('posts:post_edit', [cls.post.id])
@@ -37,6 +39,8 @@ class PostsViewsTests(TestCase):
         self.guest_client = Client()
         self.authorized_client = Client()
         self.authorized_client.force_login(self.user)
+        self.authorized_client2 = Client()
+        self.authorized_client2.force_login(self.user2)
 
     def posts_check_all_fields(self, post):
         """Метод, проверяющий поля поста."""
@@ -50,33 +54,33 @@ class PostsViewsTests(TestCase):
         templates_pages_names = [
             (
                 'posts/index.html',
-                reverse('posts:index')
+                reverse(self.index[0])
             ),
             (
                 'posts/group_list.html', reverse(
-                    'posts:group_list', kwargs={'slug': self.group.slug}
+                    self.group_page[0], kwargs={'slug': self.group.slug}
                 )
             ),
             (
                 'posts/profile.html', reverse(
-                    'posts:profile',
+                    self.profile[0],
                     args=[self.user]
                 )
             ),
             (
                 'posts/post_detail.html', reverse(
-                    'posts:post_detail', kwargs={'post_id': self.post.pk}
+                    self.detail[0], kwargs={'post_id': self.post.pk}
                 )
             ),
             (
                 'posts/create_post.html', reverse(
-                    'posts:create_post'
+                    self.create[0]
                 )
             ),
             (
                 'posts/create_post.html',
                 reverse(
-                    'posts:post_edit',
+                    self.edit[0],
                     args=[self.post.pk])
             )
 
@@ -86,6 +90,7 @@ class PostsViewsTests(TestCase):
             with self.subTest(reverse_name=reverse_name):
                 response = self.authorized_client.get(reverse_name)
                 self.assertTemplateUsed(response, template)
+                self.assertEqual(response.status_code, HTTPStatus.OK)
 
     def test_index_group_profile_show_correct_context_posts(self):
         """Шаблоны index, group_list, profile сформированы
@@ -102,14 +107,10 @@ class PostsViewsTests(TestCase):
                     template_address, args=argument
                 )
                 ).context['page_obj'][0]
-                context = (
-                    (first_object.author, self.user),
-                    (first_object.text, self.post.text),
-                    (first_object.group, self.group),
-                )
-                for context, reverse_context in context:
-                    with self.subTest(context=context):
-                        self.assertEqual(context, reverse_context)
+                self.assertEqual(first_object.author, self.user)
+                self.assertEqual(first_object.text, self.post.text)
+                self.assertEqual(first_object.group, self.group)
+
 
     def test_posts_context_group_list_template(self):
         """
@@ -155,7 +156,11 @@ class PostsViewsTests(TestCase):
             reverse(template_address, args=argument)
         )
 
-        form_fields = {'text': forms.fields.CharField}
+        form_fields = {
+            'text': forms.fields.CharField,
+            'group': forms.fields.ChoiceField,
+        }
+        
 
         for value, expected in form_fields.items():
             with self.subTest(value=value):
@@ -171,12 +176,10 @@ class PostsViewsTests(TestCase):
         response = self.authorized_client.get(
             reverse(template_address, args=argument)
         )
-        context = response.context['author']
-        self.assertEqual(context, self.post.author)
+        author = response.context['author']
+        self.assertEqual(author, self.post.author)
 
         self.posts_check_all_fields(response.context['page_obj'][0])
-        test_page = response.context['page_obj'][0]
-        self.assertEqual(test_page, self.user.posts.all()[0])
 
     def test_posts_context_post_detail_template(self):
         """
@@ -187,13 +190,7 @@ class PostsViewsTests(TestCase):
         response = self.authorized_client.get(
             reverse(template_address, args=argument)
         )
-
-        profile = {'post': self.post}
-
-        for value, expected in profile.items():
-            with self.subTest(value=value):
-                context = response.context[value]
-                self.assertEqual(context, expected)
+        self.posts_check_all_fields(response.context['post'])
 
     def test_posts_not_from_foreign_group(self):
         """
@@ -204,17 +201,49 @@ class PostsViewsTests(TestCase):
         self.posts_check_all_fields(response.context['page_obj'][0])
         post = response.context['page_obj'][0]
         group = post.group
-        self.assertEqual(group, self.group)
+        self.assertEqual(group, self.post.group)
 
+    def test_post_in_author_profile(self):
+        """Пост попадает в профиль к автору, который его написал"""
+        template_address, argument = self.profile
+        first_object = self.authorized_client.get(reverse(
+            template_address, args=argument
+        )
+        ).context['page_obj'][0]
+        self.assertEqual(first_object.author, self.user),
+        self.assertEqual(first_object.text, self.post.text),
+        self.assertEqual(first_object.group, self.group),
+
+    def test_post_not_in_author_profile(self):
+        """Пост не попадает в профиль к автору, который его не написал;"""
+        template_address, argument = self.profile2
+        first_object = self.authorized_client2.get(reverse(
+            template_address, args=argument
+        )
+        ).context['page_obj'].object_list
+        self.assertEqual(len(first_object), 0)
+
+    def test_post_not_another_group(self):
+        """Созданный пост не попал в группу, для которой не был предназначен"""
+        another_group = Group.objects.create(
+            title='Дополнительная тестовая группа',
+            slug='test-another-slug',
+            description='Тестовое описание дополнительной группы',
+        )
+        response = self.authorized_client.get(
+            reverse('posts:group_list', kwargs={'slug': another_group.slug})
+        )
+        self.assertEqual(len(response.context['page_obj']), 0)
 
 class PostsPaginatorViewsTests(TestCase):
+    count_range = 13
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
         cls.user = User.objects.create_user(username='Тестовый пользователь')
         cls.authorized_client = Client()
         cls.authorized_client.force_login(cls.user)
-        for count in range(COUNT_RANGE):
+        for count in range(cls.count_range):
             cls.post = Post.objects.create(
                 text=f'Тестовый текст поста номер {count}',
                 author=cls.user,
