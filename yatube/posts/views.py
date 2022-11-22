@@ -52,7 +52,7 @@ def create_post(request):
             create_post.author = request.user
             create_post.save()
             return redirect('posts:profile', request.user.username)
-    context = {'form': form}
+    context = {'form': form, 'is_edit': True}
     return render(request, 'posts/create_post.html', context)
 
 

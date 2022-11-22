@@ -31,6 +31,7 @@ class PostsFormsTest(TestCase):
     def test_posts_forms_create_post(self):
         """Проверка, создает ли форма пост в базе."""
         post_count = Post.objects.count()
+
         form_data = {
             'text': 'Тестовый пост формы',
             'group': self.group.id,
@@ -51,6 +52,7 @@ class PostsFormsTest(TestCase):
     def test_posts_forms_edit_post(self):
         """Редачится ли пост."""
         post_count = Post.objects.count()
+
         form_data = {
             'text': 'Текст тестого поста',
             'group': self.group.id,
@@ -62,6 +64,7 @@ class PostsFormsTest(TestCase):
         ), data=form_data)
 
         post_endcount = Post.objects.count()
+
         self.assertEqual(post_count, post_endcount)
         self.assertTrue(Post.objects.filter(
             text=form_data['text'],
@@ -73,13 +76,16 @@ class PostsFormsTest(TestCase):
         """Проверка, не авторизованный
         пользователь не может создать пост."""
         post_count = Post.objects.count()
+
         form_data = {
             'text': 'Тестовый пост формы',
             'author': self.author.id,
             'group': self.group.id,
         }
+
         self.guest_client.post(
             reverse('posts:create_post'),
             data=form_data,
         )
+
         self.assertEqual(Post.objects.count(), post_count)

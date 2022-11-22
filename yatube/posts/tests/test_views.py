@@ -16,7 +16,9 @@ class PostsViewsTests(TestCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.user = User.objects.create_user(username='Тестовый пользователь1')
-        cls.user2 = User.objects.create_user(username='Тестовый пользователь2')
+        cls.another_user = User.objects.create_user(
+            username='Другой тестовый пользователь'
+        )
         cls.group = Group.objects.create(
             title='Тестовое название',
             slug='test-slug',
@@ -31,7 +33,7 @@ class PostsViewsTests(TestCase):
         cls.index = ('posts:index', None)
         cls.group_page = ('posts:group_list', ['test-slug'])
         cls.profile = ('posts:profile', [cls.user])
-        cls.profile2 = ('posts:profile', [cls.user2])
+        cls.profile2 = ('posts:profile', [cls.another_user])
         cls.detail = ('posts:post_detail', [cls.post.id])
         cls.create = ('posts:create_post', None)
         cls.edit = ('posts:post_edit', [cls.post.id])
@@ -41,10 +43,11 @@ class PostsViewsTests(TestCase):
         self.authorized_client = Client()
         self.authorized_client.force_login(self.user)
         self.authorized_client2 = Client()
-        self.authorized_client2.force_login(self.user2)
+        self.authorized_client2.force_login(self.another_user)
 
     def posts_check_all_fields(self, post):
         """Метод, проверяющий поля поста."""
+
         with self.subTest(post=post):
             self.assertEqual(post.text, self.post.text)
             self.assertEqual(post.author, self.post.author)
@@ -52,7 +55,7 @@ class PostsViewsTests(TestCase):
 
     def test_posts_pages_use_correct_template(self):
         """Проверка, использует ли адрес URL соответствующий шаблон."""
-        templates_pages_names = [
+        templates_pages_names = (
             (
                 'posts/index.html',
                 reverse(self.index[0])
@@ -84,8 +87,7 @@ class PostsViewsTests(TestCase):
                     self.edit[0],
                     args=[self.post.pk])
             )
-
-        ]
+        )
 
         for template, reverse_name in templates_pages_names:
             with self.subTest(reverse_name=reverse_name):
@@ -101,6 +103,7 @@ class PostsViewsTests(TestCase):
             self.group_page,
             self. profile,
         )
+
         for response in responses:
             with self.subTest(response=response):
                 template_address, argument = response
@@ -108,9 +111,7 @@ class PostsViewsTests(TestCase):
                     template_address, args=argument
                 )
                 ).context['page_obj'][0]
-                self.assertEqual(first_object.author, self.user)
-                self.assertEqual(first_object.text, self.post.text)
-                self.assertEqual(first_object.group, self.group)
+                self.posts_check_all_fields(first_object)
 
     def test_posts_context_group_list_template(self):
         """
@@ -122,7 +123,9 @@ class PostsViewsTests(TestCase):
         response = self.authorized_client.get(
             reverse(template_address, args=argument)
         )
+
         test_group = response.context['group']
+
         self.posts_check_all_fields(response.context['page_obj'][0])
         self.assertEqual(test_group, self.group)
 
@@ -145,6 +148,8 @@ class PostsViewsTests(TestCase):
             with self.subTest(value=value):
                 form_field = response.context['form'].fields[value]
                 self.assertIsInstance(form_field, expected)
+                edit_field = response.context['is_edit']
+                self.assertTrue(edit_field)
 
     def test_posts_context_post_edit_template(self):
         """
@@ -197,29 +202,35 @@ class PostsViewsTests(TestCase):
         ли он в другую группу.
         """
         response = self.authorized_client.get(reverse(*self.index))
+
+        group_list = Post.objects.filter(group=self.post.group)
         self.posts_check_all_fields(response.context['page_obj'][0])
-        post = response.context['page_obj'][0]
-        group = post.group
-        self.assertEqual(group, self.post.group)
+
+        self.assertEqual(self.group, self.post.group)
+        self.assertNotIn(self.post.group, group_list)
 
     def test_post_in_author_profile(self):
         """Пост попадает в профиль к автору, который его написал"""
         template_address, argument = self.profile
+
         first_object = self.authorized_client.get(reverse(
             template_address, args=argument
         )
         ).context['page_obj'][0]
-        self.assertEqual(first_object.author, self.user),
-        self.assertEqual(first_object.text, self.post.text),
-        self.assertEqual(first_object.group, self.group),
+
+        profile_list = Post.objects.filter(author=self.post.author)
+
+        self.assertIn(first_object, profile_list)
 
     def test_post_not_in_author_profile(self):
         """Пост не попадает в профиль к автору, который его не написал;"""
         template_address, argument = self.profile2
+
         first_object = self.authorized_client2.get(reverse(
             template_address, args=argument
         )
         ).context['page_obj'].object_list
+
         self.assertEqual(len(first_object), 0)
 
     def test_post_not_another_group(self):
@@ -229,14 +240,18 @@ class PostsViewsTests(TestCase):
             slug='test-another-slug',
             description='Тестовое описание дополнительной группы',
         )
+
         response = self.authorized_client.get(
             reverse('posts:group_list', kwargs={'slug': another_group.slug})
         )
+
         self.assertEqual(len(response.context['page_obj']), 0)
 
 
 class PostsPaginatorViewsTests(TestCase):
-    count_range = 13
+    page_limit_second = 3
+
+    count_range = POST_PER_PAGE + page_limit_second
 
     @classmethod
     def setUpClass(cls):
@@ -256,6 +271,7 @@ class PostsPaginatorViewsTests(TestCase):
     def test_posts_if_first_page_has_ten_records(self):
         """Проверка, содержит ли первая страница 10 записей."""
         response = self.authorized_client.get(reverse(*self.index))
+
         self.assertEqual(len(
             response.context.get('page_obj').object_list
         ), POST_PER_PAGE)
@@ -265,4 +281,5 @@ class PostsPaginatorViewsTests(TestCase):
         response = self.authorized_client.get(
             reverse(*self.index) + '?page=2'
         )
+
         self.assertEqual(len(response.context.get('page_obj').object_list), 3)

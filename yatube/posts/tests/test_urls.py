@@ -30,12 +30,12 @@ class PostsUrlsTests(TestCase):
             group=cls.group,
         )
 
-        cls.index = ('posts:index', None)
-        cls.group_page = ('posts:group_list', [cls.post.group.slug])
-        cls.profile = ('posts:profile', [cls.author])
-        cls.detail = ('posts:post_detail', [cls.post.id])
-        cls.create = ('posts:create_post', None)
-        cls.edit = ('posts:post_edit', [cls.post.id])
+        cls.index = '/'
+        cls.group_page = f'/group/{cls.post.group.slug}/'
+        cls.profile = f'/profile/{cls.author}/'
+        cls.detail = f'/posts/{cls.post.id}/'
+        cls.create = '/create/'
+        cls.edit = f'/posts/{cls.post.id}/edit/'
 
     def setUp(self):
         self.guest_client = Client()
@@ -46,8 +46,9 @@ class PostsUrlsTests(TestCase):
         self.no_author_client.force_login(self.no_author)
 
     def test_urls_guest_user_private(self):
-        """
-        Проверка на доступнотсь ссылок гостевому пользователю
+        """Проверка на доступнотсь ссылок
+
+        гостевому пользователю.
         """
         url_names = [
             self.index,
@@ -58,20 +59,19 @@ class PostsUrlsTests(TestCase):
 
         for url in url_names:
             with self.subTest(url=url):
-                template_address, argument = url
-                response = self.guest_client.get(reverse(
-                    template_address, args=argument
-                ))
+                response = self.guest_client.get(url)
                 self.assertEqual(response.status_code, HTTPStatus.OK)
 
     def test_unexisting_page(self):
-        """Проверка несуществующих страниц"""
+        """Проверка несуществующих страниц."""
+
         response = self.guest_client.get('/unexisting_page/')
         self.assertEqual(response.status_code, HTTPStatus.NOT_FOUND)
 
     def test_urls_auth_user_private(self):
-        """
-        Проверка на доступнотсь ссылок авторизованному пользователю
+        """Проверка на доступность ссылок
+
+        авторизованному пользователю.
         """
         url_names = [
             self.index,
@@ -83,15 +83,12 @@ class PostsUrlsTests(TestCase):
 
         for url in url_names:
             with self.subTest(url=url):
-                template_address, argument = url
-                response = self.no_author_client.get(reverse(
-                    template_address, args=argument
-                ))
+                response = self.no_author_client.get(url)
                 self.assertEqual(response.status_code, HTTPStatus.OK)
 
     def test_urls_auth_user_private(self):
         """
-        Проверка на доступнотсь ссылок авторизованному пользователю
+        Проверка на доступнотсь ссылок гостевому пользователю.
         """
         url_names = [
             self.create,
@@ -100,49 +97,48 @@ class PostsUrlsTests(TestCase):
 
         for url in url_names:
             with self.subTest(url=url):
-                template_address, argument = url
-                response = self.guest_client.get(reverse(
-                    template_address, args=argument
-                ))
+                response = self.guest_client.get(url)
                 self.assertRedirects(response, reverse(
                     'users:login')
-                    + "?next=" + reverse(
-                        template_address, args=argument)
+                    + "?next=" + url
                 )
 
     def test_post_edit_url(self):
-        """проверка доступности страниц только автору."""
+        """Проверка доступности редактирования поста."""
 
-        template_address, argument = self.edit
-        response = self.authorized_client.get(reverse(
-            template_address, args=argument
-        ))
+        response = self.authorized_client.get(self.edit)
 
         self.assertEqual(response.status_code, HTTPStatus.OK)
 
     def test_post_edit_redirect(self):
-        template_address, argument = self.edit
-        response = self.no_author_client.get(reverse(
-            template_address, args=argument
-        ))
+        """Проверка редиректа редактирования поста
+
+        для неавтора.
+        """
+        response = self.no_author_client.get(self.edit)
+
         self.assertRedirects(response, (reverse(
             'posts:post_detail', args=[self.post.id]
         )))
 
     def test_post_edit_redirect_login(self):
-        template_address, argument = self.edit
-        response = self.guest_client.get(reverse(
-            template_address, args=argument
-        ))
+        """Проверка редиректа редактирования поста
+
+        для гостя.
+        """
+        response = self.guest_client.get(self.edit)
         self.assertRedirects(
             response, reverse(
                 'users:login'
-            ) + "?next=" + reverse(
-                template_address, args=argument)
+            ) + "?next=" + self.edit
         )
 
     def test_urls_use_correct_template(self):
-        templates_url_names_public = [
+        """Проверка корректности
+
+        использования шаблонов.
+        """
+        templates_url_names_public = (
             (
                 'posts/index.html',
                 self.index
@@ -167,12 +163,9 @@ class PostsUrlsTests(TestCase):
                 'posts/create_post.html',
                 self.edit
             )
-        ]
-        """Проверка на то что URL-адрес использует подходящий шаблон."""
-        for template, reverse_name in templates_url_names_public:
+        )
+
+        for template, url in templates_url_names_public:
             with self.subTest():
-                template_address, argument = reverse_name
-                response = self.authorized_client.get(reverse(
-                    template_address, args=argument
-                ))
+                response = self.authorized_client.get(url)
                 self.assertTemplateUsed(response, template)

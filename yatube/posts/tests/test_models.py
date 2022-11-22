@@ -44,20 +44,22 @@ class PostModelsTest(TestCase):
         )
 
     def test_post_str_text(self):
-        """Ыыводятся ли только первые пятнадцать символов поста."""
-        post = PostModelsTest.post
-        text = post.text
-        self.assertEqual(str(post), text[:15])
+        """Выводятся ли только первые пятнадцать символов поста."""
+
+        self.assertEqual(str(self.post), self.post.text[:15])
+        self.assertEqual(str(self.group), self.group.title)
 
     def test_post_verbose_name(self):
         """Проверка, совпадают ли verbose_name в полях Post."""
         post = PostModelsTest.post
+
         field_verboses = {
             'text': 'Текст',
             'pub_date': 'Дата публикации',
             'author': 'Автор',
             'group': 'Группа',
         }
+
         for value, expected in field_verboses.items():
             with self.subTest(value=value):
                 self.assertEqual(
